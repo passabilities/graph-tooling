@@ -312,71 +312,74 @@ export default class DeployCommand extends Command {
 
     const deploySubgraph = async (ipfsHash: string) => {
       const spinner = print.spin(`Deploying to Graph node ${requestUrl}`);
-      client.request(
-        'subgraph_deploy',
-        {
-          name: subgraphName,
-          ipfs_hash: ipfsHash,
-          version_label: versionLabel,
-          debug_fork: debugFork,
-        },
-        async (
-          // @ts-expect-error TODO: why are the arguments not typed?
-          requestError,
-          // @ts-expect-error TODO: why are the arguments not typed?
-          jsonRpcError,
-          // @ts-expect-error TODO: why are the arguments not typed?
-          res,
-        ) => {
-          if (jsonRpcError) {
-            let errorMessage = `Failed to deploy to Graph node ${requestUrl}: ${jsonRpcError.message}`;
-
-            // Provide helpful advice when the subgraph has not been created yet
-            if (jsonRpcError.message.match(/subgraph name not found/)) {
-              if (isHostedService) {
-                errorMessage +=
-                  '\nYou may need to create it at https://thegraph.com/explorer/dashboard.';
-              } else {
-                errorMessage += `
-      Make sure to create the subgraph first by running the following command:
-      $ graph create --node ${node} ${subgraphName}`;
+      client
+        .request(
+          'subgraph_deploy',
+          {
+            name: subgraphName,
+            ipfs_hash: ipfsHash,
+            version_label: versionLabel,
+            debug_fork: debugFork,
+          },
+          async (
+            // @ts-expect-error TODO: why are the arguments not typed?
+            requestError,
+            // @ts-expect-error TODO: why are the arguments not typed?
+            jsonRpcError,
+            // @ts-expect-error TODO: why are the arguments not typed?
+            res,
+          ) => {
+            if (jsonRpcError) {
+              let errorMessage = `Failed to deploy to Graph node ${requestUrl}: ${jsonRpcError.message}`;
+  
+              // Provide helpful advice when the subgraph has not been created yet
+              if (jsonRpcError.message.match(/subgraph name not found/)) {
+                if (isHostedService) {
+                  errorMessage +=
+                    '\nYou may need to create it at https://thegraph.com/explorer/dashboard.';
+                } else {
+                  errorMessage += `
+        Make sure to create the subgraph first by running the following command:
+        $ graph create --node ${node} ${subgraphName}`;
+                }
               }
-            }
-            if (jsonRpcError.message.match(/auth failure/)) {
-              errorMessage += '\nYou may need to authenticate first.';
-            }
-            spinner.fail(errorMessage);
-            this.exit(1);
-          } else if (requestError) {
-            spinner.fail(`HTTP error deploying the subgraph ${requestError.code}`);
-            this.exit(1);
-          } else {
-            spinner.stop();
-
-            const base = requestUrl.protocol + '//' + requestUrl.hostname;
-            let playground = res.playground;
-            let queries = res.queries;
-
-            // Add a base URL if graph-node did not return the full URL
-            if (playground.charAt(0) === ':') {
-              playground = base + playground;
-            }
-            if (queries.charAt(0) === ':') {
-              queries = base + queries;
-            }
-
-            if (isHostedService) {
-              print.success(`Deployed to https://thegraph.com/explorer/subgraph/${subgraphName}`);
+              if (jsonRpcError.message.match(/auth failure/)) {
+                errorMessage += '\nYou may need to authenticate first.';
+              }
+              spinner.fail(errorMessage);
+              this.exit(1);
+            } else if (requestError) {
+              spinner.fail(`HTTP error deploying the subgraph ${requestError.code}`);
+              this.exit(1);
             } else {
-              print.success(`Deployed to ${playground}`);
+              spinner.stop();
+  
+              const base = requestUrl.protocol + '//' + requestUrl.hostname;
+              let playground = res.playground;
+              let queries = res.queries;
+  
+              // Add a base URL if graph-node did not return the full URL
+              if (playground.charAt(0) === ':') {
+                playground = base + playground;
+              }
+              if (queries.charAt(0) === ':') {
+                queries = base + queries;
+              }
+  
+              if (isHostedService) {
+                print.success(`Deployed to https://thegraph.com/explorer/subgraph/${subgraphName}`);
+              } else {
+                print.success(`Deployed to ${playground}`);
+              }
+              print.info('\nSubgraph endpoints:');
+              print.info(`Queries (HTTP):     ${queries}`);
+              print.info(``);
+              process.exit(0);
             }
-            print.info('\nSubgraph endpoints:');
-            print.info(`Queries (HTTP):     ${queries}`);
-            print.info(``);
-            process.exit(0);
-          }
-        },
-      );
+          },
+        )
+        // 2 minute timeout
+        .setTimeout(2 * 60 * 1000);
     };
 
     // we are provided the IPFS hash, so we deploy directly
